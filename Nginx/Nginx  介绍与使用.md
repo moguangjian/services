@@ -141,10 +141,65 @@ logs：存放Nginx日志文件存放目录
 > **支持include语句组合多个配置文件**，提升可维护性
 > #表示注释，$表示变量，部分指令的参数支持正则表达式
 
+#### 4.2  在一台主机上配置多站点
+
+##### 4.2.1 创建test.conf文件
+
+因为我们是通过第三方源的方式进行安装，nginx的配置文件将会放入到/etc/nginx/目录下，我们可以在/etc/gninx/conf.d/这个目录下放置我们的站点配置文件，这样就可在一台主机上配置多站点，而且也便于管理。
+
+```shell
+cd /etc/nginx/conf.d/
+mkdir vhosts
+cd vhosts
+vim test.conf
+```
+
+下面是test.conf的实际内容，注意：listen监听的端口不能冲突。
+
+```shell
+server { 
+	listen *:8080;	#要监听的端口
+	server_name www.test.cn;		#站点别名
+	location / {
+		root /home/www/Leaflet_Demo;	# 站点文件目录
+	}	
+}
+```
+
+##### 4.2.2 修改/etc/nginx/nginx.conf文件
+
+修改/etc/nginx/nginx.conf文件，在http配置项中将vhosts下的所有conf文件包含进去，如下所示：
+
+![nginx.conf文件修改](assets/nginx.conf文件修改.png)
+
+##### 4.2.3 修改站点目录的所有者及目录权限
+
+这一步很关键，否则可能会出现 **“403 Forbidden“**的错误[^4]
+
+首先，将nginx.config的user改为和启动用户一致，我们是以nginx用户及nginx用户组来运行的，所以nginx.conf配置如下:
+
+![user](assets/user.png)
+
+其次， 修改站点目录的所有者及权限
+
+```shell
+chown -R nginx:nginx /home/www/Leaflet_Demo 
+chmod -R 755 /home/www/Leaflet_Demo
+curl localhost:8900	# 此时可以正确的访问站点了
+```
+
+
+
+```shell
+fiewall-cmd --permanent --zone=public --add-port=8900/tcp 
+firewall-cmd --reload
+```
+
 
 
 [^1]:  [Nginx 相关介绍(Nginx是什么?能干嘛?)](https://www.cnblogs.com/wcwnina/p/8728391.html)
 [^2]:  [nginx](https://baike.baidu.com/item/nginx/3817705?fr=aladdin)
 [^3]:[【Nginx配置教程】Nginx-1.13.10编译安装与配置教程](http://www.linuxe.cn/post-168.html)
+[^4]:	[Nginx 出现 403 Forbidden 最终解决方法](https://www.jb51.net/article/121064.htm)
 
 [Nginx 安装与部署配置以及Nginx和uWSGI开机自启](https://www.cnblogs.com/wcwnina/p/8728430.html)
