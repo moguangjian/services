@@ -141,10 +141,144 @@ logs：存放Nginx日志文件存放目录
 > **支持include语句组合多个配置文件**，提升可维护性
 > #表示注释，$表示变量，部分指令的参数支持正则表达式
 
+#### 4.2  在一台主机上配置多站点
+
+##### 4.2.1 创建test.conf文件
+
+因为我们是通过第三方源的方式进行安装，nginx的配置文件将会放入到/etc/nginx/目录下，我们可以在/etc/gninx/conf.d/这个目录下放置我们的站点配置文件，这样就可在一台主机上配置多站点，而且也便于管理。
+
+```shell
+cd /etc/nginx/conf.d/
+mkdir vhosts
+cd vhosts
+vim test.conf
+```
+
+下面是test.conf的实际内容，注意：listen监听的端口不能冲突。
+
+```shell
+server { 
+	listen *:8080;	#要监听的端口
+	server_name www.test.cn;		#站点别名
+	location / {
+		root /home/www/Leaflet_Demo;	# 站点文件目录
+	}	
+}
+```
+
+##### 4.2.2 修改/etc/nginx/nginx.conf文件
+
+修改/etc/nginx/nginx.conf文件，在http配置项中将vhosts下的所有conf文件包含进去，如下所示：
+
+![nginx.conf文件修改](assets/nginx.conf文件修改.png)
+
+##### 4.2.3 修改站点目录的所有者及目录权限
+
+这一步很关键，否则可能会出现 **“403 Forbidden“**的错误[^4]
+
+首先，将nginx.config的user改为和启动用户一致，我们是以nginx用户及nginx用户组来运行的，所以nginx.conf配置如下:
+
+![user](assets/user.png)
+
+其次， 修改站点目录的所有者及权限
+
+```shell
+chown -R nginx:nginx /home/www/Leaflet_Demo 
+chmod -R 755 /home/www/Leaflet_Demo
+curl localhost:8900	# 此时可以正确的访问站点了
+```
+
+最后，将我们的端口加入到防火墙中，这样我们才能进行正常的访问。
+
+```shell
+fiewall-cmd --permanent --zone=public --add-port=8900/tcp 		# 要加入的
+firewall-cmd --reload
+```
+
+#### 4.3 安装uwsgi并进行配置
+
+nginx只支持静态页面的访问，以及作为反向代理。因此，我们要使用python作为后台的编程语言需要将nginx做为反向代理来使用。以下是uwsgi的配置。首先，我们假设有一个django开发的站点名叫dtxt，我们将使用8080端口对站点进行访问，并且项目的代码位于/home/www/dtxt/目录下。
+
+##### 4.3.1安装（略）
+
+##### 4.3.2 编写uwsgi.ini配置文件
+
+在实际环境中，一会将uwsgi的启动参数配置成ini文件，我们可以参照官网来写一个配置文件
+
+```ini
+# cd /www/apply/webapp
+# vim webapp.ini
+[uwsgi]
+# Django-related settings
+# 应用站点的全路径，注意是全路径
+chdir = /home/www/Leaflet_Demo
+
+# Django's wsgi file（Django项目的wsgi文件）
+module = webapp.wsgi
+
+# the virtualenv (full path)
+# home = /path/to/virtualenv
+
+# process-related settings
+# master master = true
+
+# maximum number of worker processes
+processes = 5
+
+# the socket (use the full path to be safe)
+# 使用socket文件，性能更好，但是，socket文件名及路径必须与nginx中定义的文件名和路径一致
+ socket = /home/www/Leaflet_Demo/mysite.sock
+# socket = :81
+# 直接将uwsgi做为服务器使用，需要写成这样
+# http=0.0.0.0:80
+
+# ... with appropriate permissions - may be needed
+# 修改socket文件的权限
+chmod-socket = 666
+
+# clear environment on exit
+vacuum = true
+
+```
+
+这样，我们就可以参数的方式启动我们的uwsgi服务
+
+```shell
+uwsgi --ini uwsgi.ini
+```
+
+##### 4.3.3 编写我们nginx站点的的配置文件
+
+在这里，我们将从外部的8900端口进行访问，静态请求，如访问的static目录下的文件直接通过nginx直接处理，动态的通过反向代理转发到uwsgi来进行处理
+
+```ini
+upstream dtxt {         
+    server unix:////home/www/Leaflet_Demo/mysite.sock;       
+    #server 127.0.0.1:8001;             
+}
+server {
+    listen 8000 default_server;
+    server_name dtxt.25.vm;
+    charset utf-8;
+
+    client_max_body_size 75M;
+
+    location / {
+        include /etc/nginx/uwsgi_params;
+        uwsgi_pass dtxt;
+    }
+
+    location /static {
+        alias /home/www/Leaflet_Demo/static;
+    }
+}
+```
+
 
 
 [^1]:  [Nginx 相关介绍(Nginx是什么?能干嘛?)](https://www.cnblogs.com/wcwnina/p/8728391.html)
 [^2]:  [nginx](https://baike.baidu.com/item/nginx/3817705?fr=aladdin)
 [^3]:[【Nginx配置教程】Nginx-1.13.10编译安装与配置教程](http://www.linuxe.cn/post-168.html)
+[^4]:	[Nginx 出现 403 Forbidden 最终解决方法](https://www.jb51.net/article/121064.htm)
 
 [Nginx 安装与部署配置以及Nginx和uWSGI开机自启](https://www.cnblogs.com/wcwnina/p/8728430.html)
