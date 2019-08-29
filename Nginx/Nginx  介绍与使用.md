@@ -274,7 +274,9 @@ server {
 }
 ```
 
+### 五、常见的故障
 
+[Nginx出现403 forbidden(Permission denied)报错的四种方法](https://www.cnblogs.com/fengzhongzhuzu/p/9193464.html)
 
 [^1]:  [Nginx 相关介绍(Nginx是什么?能干嘛?)](https://www.cnblogs.com/wcwnina/p/8728391.html)
 [^2]:  [nginx](https://baike.baidu.com/item/nginx/3817705?fr=aladdin)
