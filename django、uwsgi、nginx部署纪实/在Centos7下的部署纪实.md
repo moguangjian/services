@@ -2,9 +2,7 @@
 
 　　本项目是单位上使用的一个政工提示系统的应用开发，基本django框架，使用mysql数据库，python3，并部署在centos7系统上，鉴于以前我开发过的系统的部署是使用了pythonanywhere的，所以本次部署中虽有共通之处，但还是遇到了许多问题，比如防火墙、selinux、uwsgi与nginx的部署与调用、如何设置能启动服务的方式等问题，有必要记录一个完整的部署过程，以备忘。
 
-
-
-# python3的安装
+# 一、python3的安装
 
 　　这没什么好讲的，网上类似的文章太多了，所以做了个脚本，如下：
 
@@ -89,7 +87,7 @@ mysql -uroot -ppassword
 #完成。
 ```
 
-## 配置MariaDB的字符集
+## 二、配置MariaDB的字符集
 
 - 文件`/etc/my.cnf`
    `vi /etc/my.cnf`
@@ -154,7 +152,7 @@ create database zgxt default character set utf8  COLLATE utf8_general_ci;
 grant all on zgxt.* to 'zgxtuser'@'%'		-- % 表示可以从任意主机登录
 ```
 
-**一个题外话：忘记mysql的登录密码怎么办？**当我们出现如下错误提示时：
+**一个题外话：忘记mysql的登录密码怎么办？** 时间长了，我们没有记住当时设置的root用户密码，当登录时出现如下错误提示：
 
 Mysql ERROR 1045 (28000): Access denied for user 'root'@'localhost'
 
@@ -184,9 +182,81 @@ pkill -KILL -t pts/0
  systemctl start mariadb
 ```
 
-# nginx的介绍与使用[^1]
+# 三、安装Virtualenv
 
-### 一、Nginx的相关介绍
+```shell
+yum install -y python-setuptools python-devel
+pip install virtualenvwrapper
+
+#编辑.bashrc文件
+vim ~/.bashrc
+#添加进去
+export WORKON_HOME=$HOME/.virtualenvs		# 测试时我使用的是root用户登录，此时$HOME=/root
+#sudo find / -name virtualenvwrapper.sh      查看你的virtualenvwrapper.sh在什么地方
+source /usr/local/python3/bin/virtualenvwrapper.sh
+
+#重新加载.bashrc文件
+source ~/.bashrc
+
+#虚拟环境保存的路径
+cd ~/.virtualenvs/      （创建的虚拟环境都会保存在这个目录，前面设置的）
+
+#创建指定python版本的虚拟环境方法
+# find / -name python
+mkvirtualenv -p /usr/bin/python zgxt
+workon zgxt
+# 安装django项目所需要的包
+pip install -r requirements.txt
+
+```
+
+# 四、uwsgi
+
+## 4.1 安装
+
+```shell
+pip3 install uwsgi
+ln -s /usr/local/python3/bin/uwsgi /usr/bin/uwsgi
+```
+
+## 4.2 测试uWSGI:
+
+新建文件test.py，写入以下内容
+
+```python
+def application(env, start_response):
+    start_response('200 OK',[('Content-Type', 'text/html')])
+        #return ['Hello world'] # Python2
+        return [b'Hello world'] # Python3[root@localhost pro]#
+```
+
+## 4.3、运行
+
+```shell
+sudo uwsgi --http 0.0.0.0:8000 --wsgi-file test.py
+```
+
+## 4.4 调试
+
+如果**端口占用**，使用
+
+```shell
+lsof -i :80001
+```
+
+列出占用端口的程序的pid号，并使用以下命令杀掉所有占用端口的程序
+
+```shell
+sudo kill -9 pid
+#如果使用pid文件
+sudo uwsgi --stop uwsgi.pid
+```
+
+然后浏览 http://127.0.0.1:8000(或http://内网ip:8000、或http://外网ip:8000)查看效果，有”Hello World”输出即安装成功。
+
+# 五、nginx的介绍与使用[^1]
+
+### 5.1 Nginx的相关介绍
 
 *Nginx* (engine x) 是一个高性能的[HTTP](https://baike.baidu.com/item/HTTP)和[反向代理](https://baike.baidu.com/item/反向代理/7793488)web服务器，同时也提供了IMAP/POP3/SMTP[服务](https://baike.baidu.com/item/服务/100571)。Nginx是由伊戈尔·赛索耶夫为[俄罗斯](https://baike.baidu.com/item/俄罗斯/125568)访问量第二的Rambler.ru站点（俄文：Рамблер）开发的，第一个公开版本0.1.0发布于2004年10月4日。
 
@@ -220,11 +290,11 @@ Nginx是一款[轻量级](https://baike.baidu.com/item/轻量级/10002835)的[We
 
 常见的项目场景![代理的常见场景](assets/代理的常见场景.png)
 
-### 二、安装[^3]
+### 5.2、安装[^3]
 
 本教程主要是基于CENTOS7，有两种安装方式，一是基于源码的安装方式，二是使用yum的安装方式，**两种方式安装后的一些目录会不太一样**，在使用时一定要注意。
 
-#### 2.1 准备相关环境
+#### 5.2.1 准备相关环境
 
 在安装Nginx之前需要确保系统里已经安装好相关环境，包括gcc环境、pcre库（提供正则表达式和Rewrite模块的支持）、zlib库（提供Gzip压缩）、openssl库（提供ssl支持），使用yum直接安装这些依赖环境即可，不需要额外编译：
 
@@ -232,7 +302,7 @@ Nginx是一款[轻量级](https://baike.baidu.com/item/轻量级/10002835)的[We
 yum  install  gcc-c++ pcre  pcre-devel  openssl  openssl-devel  zlib  zlib-devel  -y
 ```
 
-#### 2.2使用yum安装Nginx
+#### 5.2.2使用yum安装Nginx
 
 nginx并不在centos的默认库中，需要添加epel扩展源
 
@@ -245,9 +315,9 @@ yum install -y nginx
 
 注意：**使用此方法安装的Nginx，它的配置文件目录是/etc/nginx/**
 
-#### 2.3 使用源码安装Nginx
+#### 5.2.3 使用源码安装Nginx
 
-##### 2.3.1 为Nginx创建好用户和用户组
+##### 5.2.3.1  为Nginx创建好用户和用户组
 
 编译时会用上这个信息，后面启动服务时也会指定该用户
 
@@ -256,7 +326,7 @@ groupadd nginx
 useradd -s /sbin/nologin -g nginx nginx
 ```
 
-#### 2.3.2 下载源码并安装
+#### 5.2.3.2 下载源码并安装
 
 ```shell
 cd /usr/local/src 
@@ -305,7 +375,7 @@ make && make install
 
 注意：此方法安装的Nginx，**配置文件目录是/usr/local/nginx/conf/nginx.conf**
 
-### 三、基本命令
+### 5.3、基本命令
 
 ```shell
 /usr/local/nginx/sbin/nginx  -t  #检查配置文件是否有错
@@ -318,18 +388,18 @@ make && make install
 conf：存放Nginx配置文件
 logs：存放Nginx日志文件存放目录
 
-### 四、配置
+### 5.4、配置
 
-#### 4.1 语法
+#### 5.4.1 语法
 
 > Nginx的主配置文件由指令与指令块构成，**指令块以{ }大括号将多条指令组织在一起**
 > **每条指令以；分号结尾**，指令与参数间用空格分隔
 > **支持include语句组合多个配置文件**，提升可维护性
 > #表示注释，$表示变量，部分指令的参数支持正则表达式
 
-#### 4.2  在一台主机上配置多站点
+#### 5.4.2  在一台主机上配置多站点
 
-##### 4.2.1 创建test.conf文件
+##### 5.4.2.1 创建test.conf文件
 
 因为我们是通过第三方源的方式进行安装，nginx的配置文件将会放入到/etc/nginx/目录下，我们可以在/etc/gninx/conf.d/这个目录下放置我们的站点配置文件，这样就可在一台主机上配置多站点，而且也便于管理。
 
@@ -337,28 +407,28 @@ logs：存放Nginx日志文件存放目录
 cd /etc/nginx/conf.d/
 mkdir vhosts
 cd vhosts
-vim test.conf
+vim zgxt.conf
 ```
 
-下面是test.conf的实际内容，注意：listen监听的端口不能冲突。
+下面是zgxt.conf的实际内容，注意：listen监听的端口不能冲突。
 
 ```shell
 server { 
-	listen *:8080;	#要监听的端口
-	server_name www.test.cn;		#站点别名
+	listen *:8000;	#要监听的端口
+	server_name www.zgxt.gygac;		#站点别名
 	location / {
 		root /home/www/Leaflet_Demo;	# 站点文件目录
 	}	
 }
 ```
 
-##### 4.2.2 修改/etc/nginx/nginx.conf文件
+##### 5.4.2.2 修改/etc/nginx/nginx.conf文件
 
 修改/etc/nginx/nginx.conf文件，在http配置项中将vhosts下的所有conf文件包含进去，如下所示：
 
 ![nginx.conf文件修改](assets/nginx.conf文件修改.png)
 
-##### 4.2.3 修改站点目录的所有者及目录权限
+##### 5.4.2.3 修改站点目录的所有者及目录权限
 
 这一步很关键，否则可能会出现 **“403 Forbidden“**的错误[^4]
 
@@ -369,21 +439,21 @@ server {
 其次， 修改站点目录的所有者及权限
 
 ```shell
-chown -R nginx:nginx /home/www/Leaflet_Demo 
-chmod -R 755 /home/www/Leaflet_Demo
-curl localhost:8900	# 此时可以正确的访问站点了
+chown -R nginx:nginx /home/www/zhenggongxitong
+chmod -R 755 /home/www/zhenggongxitong
+curl localhost:8000	# 此时可以正确的访问站点了
 ```
 
 最后，将我们的端口加入到防火墙中，这样我们才能进行正常的访问。
 
 ```shell
-fiewall-cmd --permanent --zone=public --add-port=8900/tcp 		# 要加入的
+fiewall-cmd --permanent --zone=public --add-port=8000/tcp 		# 要加入的
 firewall-cmd --reload
 ```
 
 #### 4.3 安装uwsgi并进行配置
 
-nginx只支持静态页面的访问，以及作为反向代理。因此，我们要使用python作为后台的编程语言需要将nginx做为反向代理来使用。以下是uwsgi的配置。首先，我们假设有一个django开发的站点名叫dtxt，我们将使用8080端口对站点进行访问，并且项目的代码位于/home/www/dtxt/目录下。
+nginx只支持静态页面的访问，以及作为反向代理。因此，我们要使用python作为后台的编程语言需要将nginx做为反向代理来使用。以下是uwsgi的配置。
 
 ##### 4.3.1安装（略）
 
