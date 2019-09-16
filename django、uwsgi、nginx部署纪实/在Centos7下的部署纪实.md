@@ -212,6 +212,8 @@ pip install -r requirements.txt
 
 # 四、uwsgi
 
+uwsgi是一个web服务器，也可以当做中间件。负责处理由nginx传递过来的动态请求。
+
 ## 4.1 安装
 
 ```shell
@@ -417,7 +419,7 @@ server {
 	listen *:8000;	#要监听的端口
 	server_name www.zgxt.gygac;		#站点别名
 	location / {
-		root /home/www/Leaflet_Demo;	# 站点文件目录
+		root /home/www/zhenggongxitong;	# 站点文件目录
 	}	
 }
 ```
@@ -455,18 +457,45 @@ firewall-cmd --reload
 
 nginx只支持静态页面的访问，以及作为反向代理。因此，我们要使用python作为后台的编程语言需要将nginx做为反向代理来使用。以下是uwsgi的配置。
 
+```ini
+[uwsgi]
+
+# Django-related settings
+# the base directory (full path)
+chdir           = /home/www/zhenggongxitong/
+# Django's wsgi file
+module          = zhenggongxitong.wsgi
+# the virtualenv (full path)
+#home            = /.virtualenv/map/
+virtualenv = /root/.virtualenvs/zgxt/
+# process-related settings
+# master
+master          = true
+# maximum number of worker processes
+processes       = 10
+# the socket (use the full path to be safe
+#socket          = /home/www/zhenggongxitong/site.sock
+socket          = :8001
+# ... with appropriate permissions - may be needed
+chmod-socket    = 666
+# clear environment on exit
+vacuum          = true
+```
+
+
+
 ##### 4.3.1安装（略）
 
 ##### 4.3.2 
 
 ```conf
 upstream dtxt {         
-    server unix:////home/www/dtxt/site.sock;             
-    #server 127.0.0.1:8001;             
+    #server unix:////home/www/zhenggongxitong/site.sock;             
+    server 127.0.0.1:8001;             
 }
 server {
     listen 8000 default_server;
-    server_name dtxt.25.vm;
+    server_name www.zgxt.gygac;
     charset utf-8;
 
     client_max_body_size 75M;
@@ -477,16 +506,123 @@ server {
     }
 
     location /static {
-        alias /home/www/dtxt/static;
+        alias /home/www/zhenggongxitong/static;
     }
 }
 ```
 
+# 六、将uwsgi 与 nginx 作为服务开机启动
 
+将uwsgi与nginx作为服务启动有很多方法，由于时间关系，没有更多的研究其它的方法，我只记录了其中一种
+
+### 6.1 将uwsgi设置为服务
+
+这里需要实现uwsgi的启动和停止，简单的处理方式可以直接在命令行中启动和kill掉uwsgi服务，但为了更安全、方便的管理uwsgi服务，配置uwsgi到systemd服务中，同时实现开启自启的功能；
+
+#### 6.1.1创建配置文件
+
+```shell
+vim /etc/systemd/system/server_uwsgi.service
+```
+
+```ini
+[Unit]
+Description=HTTP Interface Server
+After=syslog.target
+ 
+[Service]
+KillSignal=SIGQUIT
+ExecStart=/bin/uwsgi --ini /home/www/zhenggongxitong/uwsgi.ini
+Restart=always
+Type=notify
+NotifyAccess=all
+StandardError=syslog
+  
+[Install]
+WantedBy=multi-user.target
+```
+
+上面中ExecStart中的路径必需是绝对路径。
+
+#### 6.1.2将该服务加入到systemd中
+
+```shell
+systemctl enable /etc/systemd/system/server_uwsgi.service
+```
+
+然后就可以通过systemctl来控制服务的启停
+
+systemctl stop server_uwsgi.service      关闭uwsgi服务
+systemctl start server_uwsgi.service     开启uwsgi服务
+systemctl restart server_uwsgi.service   重启uwsgi服务
+
+注意事项：
+
+```
+如果uwsgi配置文件中配置了 daemonize=/path/uwsgi.log (uwsgi服务以守护进程运行)
+会导致sytemctl启动时多次重启而导致启动失败
+需改为 logto=/path/uwsgi.log
+```
+
+### 6.2 nginx设置为启动
+
+```shell
+systemctl enable nginx
+```
+
+# 七、常见问题
+
+### 7.1 启动nginx失败
+
+启动nginx的服务失败，查看nginx的错误日志，出现如下错误提示：
+
+> Starting nginx: nginx: [emerg] bind() to 0.0.0.0:8091 failed (13: Permission denied)[^5]
+
+权限被拒绝，开始以为是端口被别的程序占用了，查看活动端口然而没有程序使用此端口，网上搜索说是需要权限的问题，但是我在测试时直接在命令行输入`nginx`，运行是正常的，说明应该不是目录的权限问题，而且我在设置nginx的配置文件时，使用了nginx用户及用户组，并将目录的所有者有权限都设置成了nginx，但将nginx作为服务时，一但重启就出现错误，这就挺郁闷的,后来还是给力的google给了答案，是因为selinux默认只允许80,81,443,8008,8009,8443,9000用作HTTP端口使用
+
+要查看selinux允许的http端口必须使用semanage命令，下面首先安装semanage命令工具
+
+在安装semanage工具之前，我们先安装一个tab键补齐二级命令功能工具bash-completion：
+
+```shell
+yum -y install bash-completion
+yum -y install policycoreutils-python.x86_64
+```
+
+现在终于可以使用semanage了，我们先查看下http允许访问的端口：
+
+```shell
+semanage port -l | grep http_port_t
+```
+
+
+
+\ semanage port -l | grep http_port_t
+
+http_port_t                    tcp      80, 81, 443, 488, 8008, 8009, 8443, 9000
+
+然后我们将需要使用的端口8088加入到端口列表中：
+
+\# semanage port -a -t http_port_t -p tcp 8088
+
+\# semanage port -l | grep http_port_t
+
+http_port_t                    tcp      8088, 80, 81, 443, 488, 8008, 8009, 8443, 9000
+
+好了现在nginx可以使用8088端口了
+
+selinux的日志在/var/log/audit/audit.log
+
+但此文件记录的信息不够明显，很难看出来，我们可以借助audit2why和audit2allow工具查看，这两个工具也是policycoreutils-python软件包提供的。
+
+\# audit2why < /var/log/audit/audit.log
+
+收集selinux工具的日志，还有另外一个工具setroubleshoot，对应的软件包为setroubleshoot-server
 
 [^1]:  [Nginx 相关介绍(Nginx是什么?能干嘛?)](https://www.cnblogs.com/wcwnina/p/8728391.html)
 [^2]:  [nginx](https://baike.baidu.com/item/nginx/3817705?fr=aladdin)
 [^3]:[【Nginx配置教程】Nginx-1.13.10编译安装与配置教程](http://www.linuxe.cn/post-168.html)
 [^4]:	[Nginx 出现 403 Forbidden 最终解决方法](https://www.jb51.net/article/121064.htm)
+[^5]: [重启Nginx出现bind() to 0.0.0.0:8088 failed (13: Permission denied)](https://www.linuxidc.com/Linux/2019-02/157121.htm)
 
 [Nginx 安装与部署配置以及Nginx和uWSGI开机自启](https://www.cnblogs.com/wcwnina/p/8728430.html)
