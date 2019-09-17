@@ -595,34 +595,125 @@ yum -y install policycoreutils-python.x86_64
 semanage port -l | grep http_port_t
 ```
 
+> semanage port -l | grep http_port_t
+>
+> http_port_t                    tcp      80, 81, 443, 488, 8008, 8009, 8443, 9000
 
+然后我们将需要使用的端口8000加入到端口列表中：
 
-\ semanage port -l | grep http_port_t
+```shell
+ semanage port -a -t http_port_t -p tcp 8000
+```
 
-http_port_t                    tcp      80, 81, 443, 488, 8008, 8009, 8443, 9000
+> semanage port -l | grep http_port_t
+>
+> http_port_t                    tcp      8000, 80, 81, 443, 488, 8008, 8009, 8443, 9000
 
-然后我们将需要使用的端口8088加入到端口列表中：
-
-\# semanage port -a -t http_port_t -p tcp 8088
-
-\# semanage port -l | grep http_port_t
-
-http_port_t                    tcp      8088, 80, 81, 443, 488, 8008, 8009, 8443, 9000
-
-好了现在nginx可以使用8088端口了
+好了现在nginx可以使用8000端口了
 
 selinux的日志在/var/log/audit/audit.log
 
 但此文件记录的信息不够明显，很难看出来，我们可以借助audit2why和audit2allow工具查看，这两个工具也是policycoreutils-python软件包提供的。
 
-\# audit2why < /var/log/audit/audit.log
+```shell
+audit2why < /var/log/audit/audit.log
+```
 
 收集selinux工具的日志，还有另外一个工具setroubleshoot，对应的软件包为setroubleshoot-server
+
+### 7.2 SElinux错误：ValueError：已定义端口tcp / 8000[^6]
+
+我一直在尝试在端口8000上为SELinux添加一个异常，因为我使用了命令：
+
+```shell
+ semanage port -a -t http_port_t -p tcp 5000
+```
+
+但是返回错误:
+
+> ValueError: Port tcp/8000 already defined
+
+我尝试使用以下命令检查是否是这样：
+
+```shell
+semanage port -l |grep 8000
+```
+
+给出了输出，
+
+> http_port_t                    tcp      80, 81, 443, 488, 8008, 8009, 8443, 9000
+
+如您所见，8000不在列表中。
+
+我有什么明显的遗失吗？
+
+所以我发现另一个服务已经为TCP端口8000定义了状态。
+
+但是通过用`-a`替换`-m`选项进行修改，将tcp port 8000添加到`http_port_t`
+
+所以有效的命令是：
+
+```shell
+semanage port -m -t http_port_t -p tcp 8000
+```
+
+### 7.3 centos 7上nginx 报错，open() "style.css" failed (13: Permission denied)
+
+前两天部署好后，我测试一直正常的，今天有同事说网页显示不正常，css文件无法获取，发现web打开没有找到静态文件，nginx日志报permission denied, 检查过程如下：
+
+#### 7.3.1 检查/home/www/zhenggongxitong/static目录的属主和权限
+
+```shell 
+chown -R nginx:nginx /home/www/zhenggongxitong
+```
+
+属主和用户组均为nginx(上文中已做了修改)(nginx worker以nginx用户启动)，权限正确
+
+没办法，google，发现stackoverflow如下回答:
+
+> 24  I've just had the same problem on a CentOS 7 box.
+> Seems I'd hit selinux. Putting selinux into permissive mode (setenforce permissive) has worked round the problem for now. I'll try and get back with a proper fix.
+
+在命令行执行指令setenforce permissive(宽容模式：代表 SELinux 运作中，不过仅会有警告讯息并不会实际限制 domain/type 的存取。这种模式可以运来作为 SELinux 的 debug 之用；)后刷新恢复。
+
+这种办法只是把selinux的安全级别降低了。
+
+经过不停的google+各种关键词，终于找到彻底解决办法：
+
+#### 7.3.2 安装audit.log的相关分析工具集
+
+```shell
+yum install setroubleshoot
+```
+
+#### 7.3.3 产生可访问的白名单
+
+```shell
+cat /var/log/audit/audit.log| grep nginx |audit2allow -M mynginx
+```
+
+#### 7.3.4 使白名单生效
+
+```shell
+semodule -i mynginx.pp
+#恢复selinux默认功能
+setenforce enforcing
+```
+
+
+再次刷新页面，静态文件正常，问题解决
+
+附上selinux的介绍：
+
+SELinux(Security-Enhanced Linux) 是美国国家安全局（NSA）对于强制访问控制的实现，是 Linux历史上最杰出的新安全子系统。NSA是在Linux社区的帮助下开发了一种访问控制体系，在这种访问控制体系的限制下，进程只能访问那些在他的任务中所需要文件。
+
+
 
 [^1]:  [Nginx 相关介绍(Nginx是什么?能干嘛?)](https://www.cnblogs.com/wcwnina/p/8728391.html)
 [^2]:  [nginx](https://baike.baidu.com/item/nginx/3817705?fr=aladdin)
 [^3]:[【Nginx配置教程】Nginx-1.13.10编译安装与配置教程](http://www.linuxe.cn/post-168.html)
 [^4]:	[Nginx 出现 403 Forbidden 最终解决方法](https://www.jb51.net/article/121064.htm)
 [^5]: [重启Nginx出现bind() to 0.0.0.0:8088 failed (13: Permission denied)](https://www.linuxidc.com/Linux/2019-02/157121.htm)
+[^6]: [SElinux错误：ValueError：已定义端口tcp / 5000](http://www.kbase101.com/question/35273.html)
 
 [Nginx 安装与部署配置以及Nginx和uWSGI开机自启](https://www.cnblogs.com/wcwnina/p/8728430.html)
