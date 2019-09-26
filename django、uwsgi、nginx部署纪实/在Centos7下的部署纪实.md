@@ -59,7 +59,7 @@ if ! grep "python2" /usr/sbin/firewalld  >/dev/null 2>&1;then
 fi
 ```
 
-# 安装mariadb
+# 二、安装mariadb
 
 ```shell
 yum -y install mariadb mariadb-server
@@ -87,7 +87,7 @@ mysql -uroot -ppassword
 #完成。
 ```
 
-## 二、配置MariaDB的字符集
+## 配置MariaDB的字符集
 
 - 文件`/etc/my.cnf`
    `vi /etc/my.cnf`

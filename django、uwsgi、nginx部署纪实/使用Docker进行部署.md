@@ -207,3 +207,12 @@ RUN yum install -y mysql-devel && \
 
 
 
+参考文章：
+
+[docker 生成 django + uwsgi + nginx + supervisor 镜像](https://blog.csdn.net/qq_31325495/article/details/88891525)
+
+[django上线部署-uwsgi+nginx+py3/django1.10](https://www.cnblogs.com/iiiiiher/p/8258903.html)
+
+[docker入门，如何部署Django uwsgi nginx应用](https://www.imooc.com/article/23052)
+
+[使用Docker搭建Django，Nginx，R，Python部署环境的方法](https://www.jb51.net/article/134884.htm)
