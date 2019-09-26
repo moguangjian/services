@@ -1,6 +1,6 @@
 # 使用Docker 部署_ubuntu版
 
-　　本文参考了网上的文章：
+　　本文参考了网上的文章：[项目部署：docker-django-nginx-uwsgi-postgres-supervisor](https://blog.csdn.net/qq_36792209/article/details/82778611)、[**django-uwsgi-nginx**](https://github.com/dockerfiles/django-uwsgi-nginx)
 
 　　上周，我们完成了django、uwsgi、nginx在centos7上的部署，在部署中遇到了不少的问题，经过查找资料都一一解决了，为此还制作了一些安装脚本，但是如果再部署另一台服务器，我觉得遇到的问题还会不少，记得以前学习过Docker，如果我们制作好了镜像，那么无论我们部署多少台服务器，都会是一件非常简单的事，所以将我尝试制作Docker镜像的过程记录下来，因为通过制作镜像，发现制作好的Dockerfile基本只需要简单的修改python的版本，几乎满足所有的django应用。
 
@@ -257,6 +257,8 @@ FROM ubuntu:18.04
 MAINTAINER gdlmo <gytlgac@163.com>
 
 ENV LANG C.UTF-8
+# 设置时区
+ENV TZ=Asia/Shanghai
 
 RUN mkdir -p /data/apps/mysite /data/tmp/sock /data/tmp/pid /data/logs/uwsgi /data/logs/nginx /data/logs/supervisor
 
@@ -272,6 +274,8 @@ ADD docker/sources.list /etc/apt/sources.list
 
 RUN apt-get update && \
     apt-get upgrade -y && \ 	
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    apt-get install tzdata && \
     apt-get install -y \
     libmysqlclient-dev \
 	vim \
