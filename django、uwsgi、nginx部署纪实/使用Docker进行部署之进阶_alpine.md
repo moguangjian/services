@@ -1,6 +1,6 @@
 # 使用Docker 部署之进阶_alpine版
 
-　　本文参考了网上的文章：[项目部署：docker-django-nginx-uwsgi-postgres-supervisor](https://blog.csdn.net/qq_36792209/article/details/82778611)、[**django-uwsgi-nginx**](https://github.com/dockerfiles/django-uwsgi-nginx)、[Docker从alpine构建python3+Django+uwsgi+twisted+Pillow+mysql](https://www.jianshu.com/p/6fa94d6222d2)、[docker-alpine-python3-selenium](https://www.jianshu.com/p/59034b414a5e)
+　　本文参考了网上的文章：[项目部署：docker-django-nginx-uwsgi-postgres-supervisor](https://blog.csdn.net/qq_36792209/article/details/82778611)、[**django-uwsgi-nginx**](https://github.com/dockerfiles/django-uwsgi-nginx)、[alpine-python3-django-uwsgi-nginx ](https://github.com/Koff/alpine-python3-django-uwsgi-nginx)、[Docker构建nginx+uwsgi+flask镜像（一）](https://www.cnblogs.com/beiluowuzheng/p/10219506.html)、[Docker从alpine构建python3+Django+uwsgi+twisted+Pillow+mysql](https://www.jianshu.com/p/6fa94d6222d2)、[docker-alpine-python3-selenium](https://www.jianshu.com/p/59034b414a5e)
 
 　　前面，我们完成了使用ubuntu的镜像完成了部署的工作（《使用Docker进行部署_ubuntu1804》），但是，在部署中我发现存在几个问题：一、生成的镜像比较大，有600多M，所以这次我们采用体积更小的apline镜像作为基础镜像; 二、生成的过程非常慢，一小点改动要重新生成镜像会非常的耗时。在这篇文章中我们将主要解决上述的问题，并做一些测试与改动，如将代码和日志都放在宿主机上，通过卷映射的方式来使用，这样我们在开发时修改代码就不必每次重新生成镜像了。
 
@@ -145,7 +145,7 @@ RUN apk add --update --upgrade \
     vim    
 
 # 安装软件python3,升级pip,setuptools,安装nginx supervisor uwsgi
-RUN apk add --no-cache python3 gcc make libc-dev linux-headers pcre-dev python3-dev nginx supervisor \    
+RUN apk add --no-cache python3 gcc make libc-dev linux-headers pcre-dev jpeg-dev zlib-dev mariadb-dev libffi-dev python3-dev nginx supervisor \    
     && python3 -m ensurepip \
     && rm -r /usr/lib/python*/ensurepip \
     && pip3 install --default-timeout=100 --no-cache-dir --upgrade pip -i https://pypi.douban.com/simple \
@@ -167,11 +167,11 @@ EXPOSE 80
 # CMD [ "/bin/sh" ]
 ```
 
+<font color='red'>**注意：**</font> 有几个包是需要安装的，分别是`jpeg-dev zlib-dev mariadb-dev libffi-dev`,如果不安装，在安装django及mysql所需要的包时会出错。
+
 ```shell
 docker build -t alpine_py3_uwsgi_nginx:v1 .
 ```
-
-
 
 ### 四、准备制作镜像的文件
 
