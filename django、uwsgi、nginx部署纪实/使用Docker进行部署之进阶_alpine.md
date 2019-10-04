@@ -31,32 +31,36 @@
 ```shell
 [root@localhost mysite]# pwd
 /home/mysite
-[root@localhost mysite]# tree -L 2
+[root@localhost mysite]# tree -L 3
 .
 ├── db.sqlite3
 ├── docker
 │   ├── Dockerfile
-│   ├── Dockerfile_bak
+│   ├── Dockerfile1
 │   ├── mysite_nginx.conf
-│   ├── pip.conf
-│   ├── sources.list
+│   ├── nginx.conf
 │   ├── supervisord.conf
 │   └── uwsgi.ini
 ├── manage.py
 ├── mysite
 │   ├── __init__.py
 │   ├── __pycache__
+│   │   ├── __init__.cpython-36.pyc
+│   │   ├── settings.cpython-36.pyc
+│   │   ├── urls.cpython-36.pyc
+│   │   └── wsgi.cpython-36.pyc
 │   ├── settings.py
 │   ├── urls.py
 │   └── wsgi.py
 ├── requirements.txt
 ├── static
 │   └── admin
+│       ├── css
+│       ├── fonts
+│       ├── img
+│       └── js
 └── todo.md
-
 ```
-
-
 
 ### 二、准备项目文件
 
@@ -165,7 +169,6 @@ EXPOSE 80
 # 设置启动时预期的命令参数, 可以被 docker run 的参数覆盖掉.
 # CMD [ "/bin/sh" ]
 ```
-
 **<font color=red>注意：</font>** 有几个包是需要安装的，分别是`jpeg-dev zlib-dev mariadb-dev libffi-dev`,如果不安装，在安装django及mysql所需要的包时会出错。并且还要安装`bash`,否则不能使用sh进入容器的命令行。
 
 ```shell
@@ -203,7 +206,6 @@ pidfile 		= /data/tmp/pid/mysite.pid
 chmod-socket    = 666
 # clear environment on exit
 vacuum          = true
-
 ```
 
 **<font color=red>注意：</font>** chdir与module的配置项一定要写对，并且 socket配置项一定要与nginx中的一致。
@@ -311,47 +313,6 @@ http {
 	include /etc/nginx/sites-available/default/*.conf;
 }
 ```
-
-在目录`/home/mysite/docker`中新建mysite_nginx.conf文件，内容如下：
-
-```ini
-# mysite_nginx.conf
-
-# the upstream component nginx needs to connect to
-upstream mysite {
-    # server unix:///path/to/your/mysite/mysite.sock; # for a file socket
-    #server 127.0.0.1:8001; # for a web port socket (we'll use this first)
-    server unix:///data/tmp/sock/mysite.sock;       # 必需与uwsgi.ini中定义的一致
-}
-# configuration of the server
-server {
-    # the port your site will be served on
-    listen      80 default_server;
-    # the domain name it will serve for
-    server_name localhost; # substitute your machine's IP address or FQDN
-    charset     utf-8;
-
-    # max upload size
-    client_max_body_size 75M;   # adjust to taste
-
-#   Django media
-#    location /media  {
-#       alias /path/to/your/mysite/media;  # 你的 Django 项目media files路径 - amend as required
-#   }
-
-   location /static {
-       alias /data/apps/mysite/static; # 你的 Django 项目 static files路径 - amend as required
-   }
-
-    # Finally, send all non-media requests to the Django server.
-    location / {
-        uwsgi_pass  mysite;
-        include     /etc/nginx/uwsgi_params; # the uwsgi_params file you installed
-    }
-}
-
-```
-
 **<font color=red>注意：</font>** 
 
 - socket要与uwsgi.ini中定义的一致
@@ -401,7 +362,7 @@ RUN pip3 install  --default-timeout=100 --no-cache-dir -r /data/apps/mysite/requ
 
 EXPOSE 80
 # CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
-ENTRYPOINT ["/usr/bin/supervisord, "-n" "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+ENTRYPOINT ["/usr/bin/supervisord",  "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 ```
 
 **<font color=red>注意</font>**
@@ -420,7 +381,7 @@ ENTRYPOINT ["/usr/bin/supervisord, "-n" "-c", "/etc/supervisor/conf.d/supervisor
 
   而使用`ENTRYPOINT ["/usr/bin/supervisord, "-n" "-c", "/etc/supervisor/conf.d/supervisord.conf"]`则不会出现错误
 
-- supervisord加入了-n参数，否则会自动退出容器
+- supervisord加入了-n参数，否则会自动退出容器，也可以在supervisord.conf中加入`nodaemon=true`
 
 ### 五、开始制作
 
@@ -431,7 +392,6 @@ ENTRYPOINT ["/usr/bin/supervisord, "-n" "-c", "/etc/supervisor/conf.d/supervisor
 ```shell
 cd /home/mysite
 docker build -f docker/Dockerfile -t django:v1 .
-
 ```
 
 　　为什么要在项目目录下执行呢，我个人的习惯是将与项目有关的资料、执行脚本等都放到项目目录下，以便后期通过项目就可以知道项目期间还做了哪些工作，所以将制作镜像的Dockerfile放到了项目的docker目录下，如果是在Dockerfile所在的目录执行build命令，会出现一个错误：Forbidden path outside the build context  ..[^1]
@@ -448,3 +408,4 @@ docker run --name webapp -d -p 8080:80 django:v1  # 8080是你宿主机对外提
 ![django启动](assets/django启动.png)
 
 [^1]: [docker 创建镜像时显示 Forbidden path outside the build context](https://www.cnblogs.com/saving/p/10401723.html)
+
