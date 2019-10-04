@@ -145,7 +145,7 @@ RUN apk add --update --upgrade \
     vim    
 
 # 安装软件python3,升级pip,setuptools,安装nginx supervisor uwsgi
-RUN apk add --no-cache python3 gcc make libc-dev linux-headers pcre-dev jpeg-dev zlib-dev mariadb-dev libffi-dev python3-dev nginx supervisor \    
+RUN apk add --no-cache bash python3 gcc make libc-dev linux-headers pcre-dev python3-dev nginx supervisor \    
     && python3 -m ensurepip \
     && rm -r /usr/lib/python*/ensurepip \
     && pip3 install --default-timeout=100 --no-cache-dir --upgrade pip -i https://pypi.douban.com/simple \
@@ -167,7 +167,7 @@ EXPOSE 80
 # CMD [ "/bin/sh" ]
 ```
 
-<font color='red'>**注意：**</font> 有几个包是需要安装的，分别是`jpeg-dev zlib-dev mariadb-dev libffi-dev`,如果不安装，在安装django及mysql所需要的包时会出错。
+<font color='red'>**注意：**</font> 有几个包是需要安装的，分别是`jpeg-dev zlib-dev mariadb-dev libffi-dev`,如果不安装，在安装django及mysql所需要的包时会出错。并且还要安装`bash`,否则不能使用sh进入容器的命令行。
 
 ```shell
 docker build -t alpine_py3_uwsgi_nginx:v1 .
