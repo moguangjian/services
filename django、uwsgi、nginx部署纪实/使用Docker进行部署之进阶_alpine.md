@@ -458,5 +458,64 @@ docker run --name webapp -d -p 8080:80 django:v1  # 8080是你宿主机对外提
 
 ![django启动](assets/django启动.png)
 
+### 六、一些补充
+
+#### 6.1、制作镜像的脚本
+
+为了方便各个应用程序能快速的构建镜像，我特意制作了一个脚本`dockerbuild.sh`，以便快速构建。
+
+```shell
+#!/bin/bash
+filenames=('uwsgi.ini' 'Dockerfile' 'my_nginx.conf')
+
+# 获取项目名称
+projectname=${PWD##*/}
+
+# 修改对应的制作镜像所需要的文件，将mysite替换成项目名称
+for filename in ${filenames[@]};do
+    echo $filename
+    if grep "mysite" ./docker/$filename >/dev/null 2>&1;then
+        sed -i "s/mysite/$projectname/g" ./docker/$filename
+    fi    
+done
+
+# 构建镜像
+docker build -f ./docker/Dockerfile -t $projectname:v1 .
+
+# 还原成原样以备其它项目引用
+for filename in ${filenames[@]};do
+    echo $filename
+    if grep $projectname ./docker/$filename >/dev/null 2>&1;then
+        sed -i "s/$projectname/mysite/g" ./docker/$filename
+    fi    
+done
+```
+
+在项目目录下使用
+
+```shell
+sh dockerbuild.sh
+```
+
+#### 6.2、docker命令的别名
+
+将下面的语句加入到`~/.bashrc`文件尾部
+
+```shell
+alias cls='clear'
+alias dcr='docker rm '		# 删除所指定的容器
+alias dpa='docker ps -a' 	# 查看所有容器的状态
+alias dre='docker rm $(docker ps -qf status=exited)'	# 删除exited状态的容器
+alias di='docker images'	# 列出所有镜像
+```
+
+```shell
+source ~/.bashrc	# 使别名生效
+```
+
+
+
+
+
 [^1]: [docker 创建镜像时显示 Forbidden path outside the build context](https://www.cnblogs.com/saving/p/10401723.html)
 
