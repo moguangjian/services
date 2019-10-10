@@ -150,12 +150,13 @@ RUN apk add --update --upgrade \
     vim    
 
 # 安装软件python3,升级pip,setuptools,安装nginx supervisor uwsgi
-RUN apk add --no-cache python3 gcc make libc-dev linux-headers pcre-dev jpeg-dev zlib-dev mariadb-dev libffi-dev python3-dev nginx supervisor \    
+RUN apk add --no-cache bash python3 gcc make libc-dev linux-headers pcre-dev jpeg-dev zlib-dev mariadb-dev libffi-dev python3-dev nginx supervisor \    
     && python3 -m ensurepip \
     && rm -r /usr/lib/python*/ensurepip \
     && pip3 install --default-timeout=100 --no-cache-dir --upgrade pip -i https://pypi.douban.com/simple \
     && pip3 install --default-timeout=100 --no-cache-dir --upgrade setuptools -i https://pypi.douban.com/simple \
     && pip3 install --default-timeout=100 --no-cache-dir --upgrade uwsgi -i https://pypi.douban.com/simple \
+	&& mkdir -p /run/nginx/ \
     && rm -rf /var/cache/apk/* \
     && rm -rf ~/.cache/pip
 
@@ -169,10 +170,60 @@ EXPOSE 80
 # 设置启动时预期的命令参数, 可以被 docker run 的参数覆盖掉.
 # CMD [ "/bin/sh" ]
 ```
-**<font color=red>注意：</font>** 有几个包是需要安装的，分别是`jpeg-dev zlib-dev mariadb-dev libffi-dev`,如果不安装，在安装django及mysql所需要的包时会出错。并且还要安装`bash`,否则不能使用sh进入容器的命令行。
+构建镜像
 
 ```shell
 docker build -t alpine_py3_uwsgi_nginx:v1 .
+```
+
+**<font color=red>注意：</font>** 有几个包是需要安装的，分别是`jpeg-dev zlib-dev mariadb-dev libffi-dev`,如果不安装，在安装django及mysql所需要的包时会出错。并且还要安装`bash`,否则不能使用sh进入容器的命令行。
+
+**<font color=red>注意：</font>** 在镜像中我加入了`ENTRYPOINT [ "/bin/sh" ]`，所以进入启动容器进入命令行的格式是：
+
+```shell
+docker run --name webapp -it -p 8080:80 alpine_py3_uwsgi_nginx:v1
+```
+
+我曾经使用加了`/bin/sh`参数的命令行，得到如下错误：
+
+```shell
+docker run --name webapp -it -p 8080:80 alpine_py3_uwsgi_nginx:v1 /bin/sh
+/bin/sh: line 1:ELF: not found
+/bin/sh: line 2: p: not found
+/bin/sh: line 3: p: not found
+/bin/sh: line 1: t
+                  : not found
+/bin/sh: line 1:  
+                 ʺ not found
+/bin/sh: line 1: D ¢
+                     ²
+                       ²
+                       Q䳤R䳤: not found
+/bin/sh: line 1:  
+                 : not found
+/bin/sh: line 4: 񕸁 
+                  t
+                    
+                    : not found
+/bin/sh: line 4:  : not found
+L@DImnstuxyz: not foundd-musl-x86_64.so.1mª!R
+/bin/sh: line 1: ᯏ镳: not found
+/bin/sh: line 1: 𔸠not found
+/bin/sh: line 1: MZº¼!9!di9WۓŹ@9򉝀³񒐯ӡ²¢񐵕e
+                                        ݣk: not found
+/bin/sh: line 1: ϥͭgUa: not found
+/bin/sh: line 6: ~씯¸󳅷: not found
+/bin/sh: line 7:  
+                 ¤: not found
+/bin/sh: line 8: ¢¨: not found
+/bin/sh: line 46: syntax error: unexpected ")"
+
+```
+
+**<font color=red>注意：</font>** 如果容器是已经启动了的，进入容器命令行的格式又有不同：
+
+```shell
+docker exec -it webapp /bin/sh
 ```
 
 ### 四、准备制作镜像的文件
