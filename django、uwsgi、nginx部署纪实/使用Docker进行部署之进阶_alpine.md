@@ -466,7 +466,7 @@ docker run --name webapp -d -p 8080:80 django:v1  # 8080是你宿主机对外提
 
 ```shell
 #!/bin/bash
-filenames=('uwsgi.ini' 'Dockerfile' 'my_nginx.conf')
+filenames=('uwsgi.ini' 'Dockerfile' 'my_nginx.conf' 'supervisord.conf')
 
 # 获取项目名称
 projectname=${PWD##*/}
