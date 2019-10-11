@@ -1,0 +1,44 @@
+# 配置基础镜像
+FROM alpine:latest
+
+# 添加标签说明
+LABEL author="mgj" email="gztf@21cn.com"  purpose="python3 uwsgi nginx supervisor in a image"
+
+# 配置清华镜像地址
+RUN echo "https://mirror.tuna.tsinghua.edu.cn/alpine/v3.8/main/" > /etc/apk/repositories
+
+# 设置用户
+USER root
+
+# 设置时区变量
+ENV LANG C.UTF-8
+ENV TIME_ZONE Asia/Shanghai
+
+#安装时区包并配置时区TIME_ZONE为中国标准时间
+RUN apk add --no-cache -U tzdata \
+    && ln -sf /usr/share/zoneinfo/${TIME_ZONE} /etc/localtime \ 
+    && echo "${TIME_ZONE}" > /etc/timezone 
+
+# 更新升级软件
+RUN apk add --update --upgrade \
+    vim    
+
+# 安装软件python3,升级pip,setuptools,安装nginx supervisor uwsgi
+RUN apk add --no-cache bash python3 gcc make libc-dev linux-headers pcre-dev jpeg-dev zlib-dev mariadb-dev libffi-dev python3-dev nginx supervisor \    
+    && python3 -m ensurepip \
+    && rm -r /usr/lib/python*/ensurepip \
+    && pip3 install --default-timeout=100 --no-cache-dir --upgrade pip -i https://pypi.douban.com/simple \
+    && pip3 install --default-timeout=100 --no-cache-dir --upgrade setuptools -i https://pypi.douban.com/simple \
+    && pip3 install --default-timeout=100 --no-cache-dir --upgrade uwsgi -i https://pypi.douban.com/simple \
+    && rm -rf /var/cache/apk/* \
+    && rm -rf ~/.cache/pip
+
+
+# 设置启动点 镜像启动时的第一个命令, 通常 docker run 的参数不会覆盖掉该指令
+ENTRYPOINT [ "/bin/sh" ]
+
+# 配置非生效对外端口
+EXPOSE 80
+
+# 设置启动时预期的命令参数, 可以被 docker run 的参数覆盖掉.
+CMD [ "/bin/sh" ]

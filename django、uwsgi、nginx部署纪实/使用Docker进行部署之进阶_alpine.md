@@ -256,7 +256,7 @@ pidfile 		= /data/tmp/pid/mysite.pid
 # ... with appropriate permissions - may be needed
 chmod-socket    = 666
 # clear environment on exit
-vacuum          = true
+vacuum          = tru
 ```
 
 **<font color=red>注意：</font>** chdir与module的配置项一定要写对，并且 socket配置项一定要与nginx中的一致。
@@ -310,7 +310,7 @@ http {
 	# indicated by the request header Content-Length. If the stated content
 	# length is greater than this size, then the client receives the HTTP
 	# error code 413. Set to 0 to disable.
-	client_max_body_size 1m;
+	client_max_body_size 75m;
 
 	# Timeout for keep-alive connections. Server will close connections after
 	# this time.
@@ -364,25 +364,67 @@ http {
 	include /etc/nginx/sites-available/default/*.conf;
 }
 ```
+#### 4.3、准备my_nginx.conf文件
+
+在目录`/home/mysite/docker`中新建my_nginx.conf文件代码如下：
+
+```ini
+# mysite_nginx.conf
+
+# the upstream component nginx needs to connect to
+upstream mysite {
+    # server unix:///path/to/your/mysite/mysite.sock; # for a file socket
+    #server 127.0.0.1:8001; # for a web port socket (we'll use this first)
+    server unix:///data/tmp/sock/mysite.sock;       # 必需与uwsgi.ini中定义的一致
+}
+# configuration of the server
+server {
+    # the port your site will be served on
+    listen      80 default_server;
+    # the domain name it will serve for
+    server_name localhost; # substitute your machine's IP address or FQDN
+    charset     utf-8;
+
+    # max upload size
+    client_max_body_size 75M;   # adjust to taste
+
+#   Django media
+    location /media  {
+       alias /data/apps/mysite/media;  # 你的 Django 项目media files路径 - amend as required
+    }
+
+    location /static {
+       alias /data/apps/mysite/static; # 你的 Django 项目 static files路径 - amend as required
+    }
+
+    # Finally, send all non-media requests to the Django server.
+    location / {
+        uwsgi_pass  mysite;
+        include     /etc/nginx/uwsgi_params; # the uwsgi_params file you installed
+    }
+}
+```
+
 **<font color=red>注意：</font>** 
 
 - socket要与uwsgi.ini中定义的一致
 - /static的路径要全路径
 - 因为要作为 default_server，所以这个文件在容器中是copy到`/etc/nginx/sites-available/default`目录中的
 
-#### 4.3 准备supervisord.conf文件
+#### 4.4 准备supervisord.conf文件
 
 在目录`/home/mysite/docker`中新建supervisord.conf文件，内容如下：
 
 ```ini
+[supervisord]
 [program:app-uwsgi]
-command = /usr/local/bin/uwsgi --ini /data/apps/mysite/docker/uwsgi.ini
+command = /usr/bin/uwsgi --ini /data/apps/uwsgi.ini
 
 [program:nginx-app]
-command = /usr/sbin/nginx
+command = /usr/sbin/ngin
 ```
 
-#### 4.4 制作Dockerfile文件
+#### 4.5 制作Dockerfile文件
 
 在目录`/home/mysite/docker`中新建Dockerfile文件，内容如下：
 
@@ -398,18 +440,20 @@ MAINTAINER gdlmo <gytlgac@163.com>
 # 设置用户
 USER root
 
-RUN mkdir -p /data/apps/mysite /data/tmp/sock /data/tmp/pid /data/logs/uwsgi /data/logs/nginx /data/logs/supervisor /etc/nginx/sites-available/default
+RUN mkdir -p /data/apps/mysite /data/tmp/sock /data/tmp/pid /data/logs/uwsgi \
+			/data/logs/nginx /data/logs/supervisor /etc/nginx/sites-available/default \
+			/etc/supervisor/conf.d/
 
 WORKDIR /data/apps/mysite
 
 COPY ./ ./
 
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/mysite_nginx.conf /etc/nginx/sites-available/default 
-COPY docker/supervisord.conf /etc/supervisor/conf.d/ 
-
 RUN pip3 install  --default-timeout=100 --no-cache-dir -r /data/apps/mysite/requirements.txt -i https://pypi.douban.com/simple \	
-	&& cp ./docker/uwsgi.ini ./
+	&& cp ./docker/nginx.conf /etc/nginx/nginx.conf \
+	&& cp ./docker/my_nginx.conf /etc/nginx/sites-available/default \
+	&& cp ./docker/supervisord.conf /etc/supervisor/conf.d/ \
+	&& cp ./docker/uwsgi.ini ../ \
+	&& rm -rf ./docker
 
 EXPOSE 80
 # CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
@@ -451,12 +495,21 @@ docker build -f docker/Dockerfile -t django:v1 .
 
 ```shell
 docker run --name webapp -d -p 8080:80 django:v1  # 8080是你宿主机对外提供的端口，防火墙要放行
-
 ```
 
 通过浏览器就可以看到熟悉的界面了
 
 ![django启动](assets/django启动.png)
+
+如果，要将宿主机上的代码映射到容器中，可以使用下面的代码：
+
+```shell
+docker run --name webapp -it -p 8080:80 -v /home/mysite/:/data/apps/mysite --privileged=true django:v1 # /home/mysite是你的宿主机上的代码所在路径
+```
+
+**<font color=red>注意</font>**
+
+> --privileged=true 是必需的，否则会出现`Permission denied`的错误提示。
 
 ### 六、一些补充
 
@@ -465,8 +518,8 @@ docker run --name webapp -d -p 8080:80 django:v1  # 8080是你宿主机对外提
 为了方便各个应用程序能快速的构建镜像，我特意制作了一个脚本`dockerbuild.sh`，以便快速构建。
 
 ```shell
-#!/bin/bash
-filenames=('uwsgi.ini' 'Dockerfile' 'my_nginx.conf' 'supervisord.conf')
+# !/bin/bash
+filenames=('uwsgi.ini' 'Dockerfile' 'my_nginx.conf' )
 
 # 获取项目名称
 projectname=${PWD##*/}
